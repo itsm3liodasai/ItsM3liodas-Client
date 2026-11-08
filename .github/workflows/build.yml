@@ -13,10 +13,6 @@ jobs:
     name: Fabric 1.21.11
     runs-on: ubuntu-latest
 
-    defaults:
-      run:
-        working-directory: source
-
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -32,12 +28,27 @@ jobs:
         with:
           gradle-version: '8.14.3'
 
+      - name: Locate Gradle project
+        run: |
+          echo "Searching for build.gradle..."
+          find . -type f \( -name build.gradle -o -name build.gradle.kts \)
+          PROJECT_DIR=$(find . -type f \( -name build.gradle -o -name build.gradle.kts \) -print -quit | xargs dirname)
+          if [ -z "$PROJECT_DIR" ]; then
+            echo "ERROR: No Gradle project found!"
+            exit 1
+          fi
+          echo "PROJECT_DIR=$PROJECT_DIR" >> "$GITHUB_ENV"
+          echo "Found project in: $PROJECT_DIR"
+
       - name: Build client
-        run: gradle --no-daemon clean build
+        run: |
+          cd "$PROJECT_DIR"
+          gradle --no-daemon clean build
 
       - name: Upload JAR
         uses: actions/upload-artifact@v4
         with:
           name: ItsM3liodas-Client-Fabric-1.21.11
-          path: source/build/libs/*.jar
+          path: ${{ env.PROJECT_DIR }}/build/libs/*.jar
           if-no-files-found: error
+          retention-days: 14
