@@ -41,15 +41,15 @@ jobs:
           PROJECT_FILE=$(find . -type f \
             \( -name build.gradle -o -name build.gradle.kts \) \
             -not -path './.git/*' \
+            -not -path './*/build/*' \
             -print -quit)
 
           if [ -z "$PROJECT_FILE" ]; then
             echo "::error::Could not find build.gradle."
-            find . -maxdepth 5 -type f | head -200
             exit 1
           fi
 
-          echo "Found Gradle project: $PROJECT_FILE"
+          echo "Found: $PROJECT_FILE"
           echo "dir=$(dirname "$PROJECT_FILE")" >> "$GITHUB_OUTPUT"
 
       - name: Set up Gradle
@@ -59,7 +59,7 @@ jobs:
 
       - name: Build client
         working-directory: ${{ steps.project.outputs.dir }}
-        run: gradle --no-daemon clean build
+        run: gradle --no-daemon --no-configuration-cache clean build
 
       - name: Upload JAR
         uses: actions/upload-artifact@v4
