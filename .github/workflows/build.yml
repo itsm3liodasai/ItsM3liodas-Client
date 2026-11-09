@@ -1,8 +1,9 @@
-name: Build ItsM3liodas Client
+name: Build Mod
 
 on:
   push:
     branches: [main]
+  pull_request:
   workflow_dispatch:
 
 permissions:
@@ -10,60 +11,39 @@ permissions:
 
 jobs:
   build:
-    name: Fabric 1.21.11
     runs-on: ubuntu-latest
-
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
       - name: Set up Java 21
-        uses: actions/setup-java@v5
+        uses: actions/setup-java@v4
         with:
           distribution: temurin
-          java-version: '21'
-
-      - name: Extract ZIP files
-        shell: bash
-        run: |
-          mkdir -p extracted
-
-          find . -maxdepth 1 -type f -iname '*.zip' -print0 |
-          while IFS= read -r -d '' file; do
-            echo "Extracting: $file"
-            unzip -oq "$file" -d extracted
-          done
-
-      - name: Find Gradle project
-        id: project
-        shell: bash
-        run: |
-          PROJECT_FILE=$(find . -type f \
-            \( -name build.gradle -o -name build.gradle.kts \) \
-            -not -path './.git/*' \
-            -not -path './*/build/*' \
-            -print -quit)
-
-          if [ -z "$PROJECT_FILE" ]; then
-            echo "::error::Could not find build.gradle."
-            exit 1
-          fi
-
-          echo "Found: $PROJECT_FILE"
-          echo "dir=$(dirname "$PROJECT_FILE")" >> "$GITHUB_OUTPUT"
+          java-version: 21
 
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
-        with:
-          gradle-version: '9.2.0'
 
-      - name: Build client
-        working-directory: ${{ steps.project.outputs.dir }}
-        run: gradle --no-daemon --no-configuration-cache clean build
+      - name: Make wrapper executable
+        run: chmod +x gradlew
+
+      - name: Build (compiles, runs tests, fails on error)
+        run: ./gradlew build --no-daemon --stacktrace
+
+      - name: Verify a real JAR was produced
+        run: |
+          ls -la build/libs/
+          JAR=$(ls build/libs/*.jar | grep -v -- '-sources' | grep -v -- '-dev' | head -n1)
+          test -n "$JAR" || { echo "No JAR built"; exit 1; }
+          test "$(stat -c%s "$JAR")" -gt 10000 || { echo "JAR suspiciously small"; exit 1; }
+          unzip -l "$JAR" | grep -q fabric.mod.json || { echo "fabric.mod.json missing"; exit 1; }
 
       - name: Upload JAR
         uses: actions/upload-artifact@v4
         with:
-          name: ItsM3liodas-Client-Fabric-1.21.11
-          path: ${{ steps.project.outputs.dir }}/build/libs/*.jar
+          name: ItsM3liodas-Client
+          path: |
+            build/libs/*.jar
+            !build/libs/*-sources.jar
+            !build/libs/*-dev.jar
           if-no-files-found: error
